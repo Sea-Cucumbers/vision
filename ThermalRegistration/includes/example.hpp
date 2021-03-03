@@ -437,8 +437,8 @@ public:
         GLenum err = glGetError();
 
         auto format = RS2_FORMAT_RGB8; //RS2_FORMAT_Y16;
-        auto width = image.cols;
-        auto height = image.rows;
+        auto width = 640;
+        auto height = 512;
         _stream_type = RS2_STREAM_COLOR;
         _stream_index = 100;
 

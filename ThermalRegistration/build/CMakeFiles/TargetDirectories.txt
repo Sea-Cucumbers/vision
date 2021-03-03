@@ -1,0 +1,7 @@
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/ThermalRegistration/build/CMakeFiles/install/strip.dir
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/ThermalRegistration/build/CMakeFiles/edit_cache.dir
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/ThermalRegistration/build/CMakeFiles/registration.dir
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/ThermalRegistration/build/CMakeFiles/install.dir
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/ThermalRegistration/build/CMakeFiles/rebuild_cache.dir
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/ThermalRegistration/build/CMakeFiles/list_install_components.dir
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/ThermalRegistration/build/CMakeFiles/install/local.dir
