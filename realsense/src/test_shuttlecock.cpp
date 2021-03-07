@@ -22,8 +22,10 @@ using namespace cv;
 // Helper functions
 void register_glfw_callbacks(window& app, glfw_state& app_state);
 
+
 int main() {
     /*************** Some initialization stuff for RealSense **************/
+
     // Create a simple OpenGL window for rendering:
     window app(1280, 720, "RealSense Pointcloud Example");
     // Construct an object to manage view state
@@ -46,11 +48,24 @@ int main() {
 	std::vector<Point2d> pixels_c;
 	std::vector<Point3d> points_c;
 
+
 	Mat rsimage_zoom;
 	Mat rsimage_zoom_gray;
 	Mat rsimagec_gray;
 	Mat rsimagec_zoom;
+    int frame_num = 0;
+    char filename_rs[60];
+
+    Mat rsimagec_blurred;
+    Mat rsimagec_rgb;
+    Mat rsimagec_hls;
+    Mat rsimagec_segmented;
+    Mat mask1, mask2;
 	int flag  = 0;
+
+    SimpleBlobDetector::Params params;
+    init_bolb_detector_params(params);
+
     // Start streaming with default recommended configuration
 	while (flag == 0){
 		try {
@@ -109,6 +124,36 @@ int main() {
         points_i = pc.calculate(depth_frame);
 
         // TODO Step 1: Find colored blobs in colored frame, draw
+        //For segmenting the image in RGB format.
+        cvtColor(rsimagec, rsimagec_rgb, COLOR_BGR2RGB);
+        gammaCorrection(rsimagec_rgb, rsimagec_rgb, 0.45); // adjust brightness
+        cvtColor(rsimagec_rgb, rsimagec_hls, COLOR_BGR2HLS);
+        //GaussianBlur(rsimagec, rsimagec_blurred, Size(5,5), 0, 0);
+        inRange(rsimagec_hls, cv::Scalar(0, 50, 35), cv::Scalar(50, 142, 255), mask1);
+        inRange(rsimagec_hls, cv::Scalar(160, 50, 35), cv::Scalar(180, 142, 255), mask2);
+        bitwise_or(mask1,  mask2, rsimagec_segmented); // blob is 255
+        //threshold(rsimagec_segmented, rsimagec_segmented, 0, 255, 1); // binary inverted
+        //GaussianBlur(rsimagec_segmented, rsimagec_segmented, Size(5,5), 0, 0);
+        Ptr<SimpleBlobDetector> detector = SimpleBlobDetector::create(params);
+        // Detect blobs.
+        std::vector<KeyPoint> keypoints;
+        detector->detect(rsimagec_segmented, keypoints);
+        
+
+        // Draw detected blobs as green circles.
+        // DrawMatchesFlags::DRAW_RICH_KEYPOINTS flag ensures the size of the circle corresponds to the size of blob
+        Mat im_with_keypoints, rsimagec_segmented_rgb;
+        cvtColor(rsimagec_segmented, rsimagec_segmented_rgb, COLOR_GRAY2RGB);
+        drawKeypoints(rsimagec_segmented_rgb, keypoints, im_with_keypoints, Scalar(0,255,0));
+        //DrawMatchesFlags::DRAW_RICH_KEYPOINTS 
+        
+        // Show blobs
+        //imshow("image", rsimagec_segmented);
+        Mat buf2;
+		Mat imgarray[] = {rsimagec_rgb, im_with_keypoints};	
+        //Mat imgarray[] = {mask1, mask2};	
+	    hconcat(imgarray, 2, buf2);
+        imshow("image", buf2);
 
         // Step 2: Transform point could and project onto colored frame
         Mat R_i = Mat::eye(3,3,CV_64F);
@@ -120,12 +165,58 @@ int main() {
 
         // TODO Step 3: Find the 3D coordinate corresponding to 
         // the blob in 2D; average that, print
+        std::cout << "num keypoints: " << keypoints.size() << std::endl;
+
+        if (keypoints.size() == 0){
+            std::cout << "bad!" << std::endl;
+            continue;
+        }
+        KeyPoint best_keypoint;
+        double min_z = 0;
+        int best_point_idx = 0;
+        for (int k = 0; k < keypoints.size(); k++){
+            KeyPoint curr_keypoint = keypoints[k];
+            Point2d pixel = curr_keypoint.pt;
+            //std::cout << pixel.x << ", " << pixel.y << std::endl;
+            double z = 0;
+            int i;
+            for (i = 0; i < pixels_c.size(); i++){
+
+                if (pixels_c[i].x - pixel.x < 2 && pixels_c[i].y - pixel.y < 2){
+                    z = points_c[i].z;
+                    break;
+                }
+            }
+            if (min_z == 0 || z < min_z){
+                min_z = z;
+                best_keypoint = curr_keypoint;
+                best_point_idx = i;
+            }
+        }
+        if (best_point_idx == 0){
+            std::cout << "bad" << std::endl;
+            continue;
+        }
+        Point3d best_point = points_c[best_point_idx];
+        std::cout << best_point.x << ", " << best_point.y << ", " << best_point.z << std::endl;
 
 
         // display colored point cloud
-        app_state.tex.upload0(rsimagec);
+        Mat rsimagec_bgr;
+        cvtColor(rsimagec_rgb, rsimagec_bgr, COLOR_RGB2BGR);
+        app_state.tex.upload0(rsimagec_bgr);
         draw_pointcloud(app.width(), app.height(), app_state, points_c, pixels_c, points_i);
 
+        // Press 'c' to capture frames
+
+		if( waitKey(1) == 'c' ) { // 0x20 (SPACE) ; need a small delay !! we use this to also add an exit option
+			printf("Capturing frames %d...\n", frame_num);
+			sprintf(filename_rs, "../samples/red/red_%04d.png", frame_num);
+            imwrite(filename_rs, rsimagec_rgb);
+            frame_num++;
+		}
+
+		
         // Press 'q' to exit
 		if( waitKey(1) == 'q' ) { // 0x20 (SPACE) ; need a small delay !! we use this to also add an exit option
 			printf("q key pressed. Quitting !\n");

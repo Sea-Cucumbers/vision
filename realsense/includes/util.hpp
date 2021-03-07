@@ -101,6 +101,36 @@ std::vector<cv::Point3d> transform_points(Mat R, Vec3d T, rs2::points from_point
     return outpoints;
 }
 
+cv::Point3d transform_point_to_point_1(Mat &R, Vec3d &T, rs2::vertex from_point)
+{   
+    double to_point[3];
+    for (int i = 0; i < 3; i++){
+        to_point[i] = R.at<double>(i,0) * from_point.x;
+        to_point[i] += R.at<double>(i,1) * from_point.y;
+        to_point[i] += R.at<double>(i,2) * from_point.z + T[i];
+    }
+    cv::Point3d outpoint(to_point[0], to_point[1], to_point[2]);
+    return outpoint;
+}
+
+void transform_points_1(Mat &R, Vec3d &T, rs2::points &from_points, std::vector<cv::Point3d> &outpoints){
+    cv::Point3d outpoint;
+    size_t size = from_points.size();
+    const rs2::vertex *from_vertices = from_points.get_vertices();
+    for (size_t i = 0; i < size; i++){
+        outpoint = transform_point_to_point_1(R, T, from_vertices[i]);
+        outpoints.push_back(outpoint);
+    }
+}
+
+void projectPoints(std::vector<cv::Point3d> points,
+                   cv::Mat R, cv::Mat T, 
+                   cv::Mat K, cv::Mat D,
+                   std::vector<cv::Point2d> pixels)
+{
+
+}
+
 
 /* Given a point in 3D space, compute the corresponding pixel coordinates in an image with no distortion or forward distortion coefficients produced by the same camera */
 void project_point_to_pixel(double pixel[2], const struct rs2_intrinsics * intrin, const double point[3])
@@ -171,3 +201,79 @@ void MyEllipse( Mat img, double angle ){
         thickness,
         lineType );
 }
+
+void init_bolb_detector_params(SimpleBlobDetector::Params &params){
+    params.blobColor = 255;
+    // Filter by Area.
+    params.filterByArea = true;
+    params.minArea = 100;
+    params.maxArea = 4000;
+    // Filter by Circularity
+    params.filterByCircularity = false;
+    params.minCircularity = 0.2;
+    // Filter by Convexity
+    params.filterByConvexity = true;
+    params.minConvexity = 0.9;
+    // Filter by Inertia
+    params.filterByInertia = true;
+    params.minInertiaRatio = 0.5;
+}
+
+void gammaCorrection(const Mat &img, Mat &img_corrected, const double gamma_){
+    CV_Assert(gamma_ >= 0);
+    //! [changing-contrast-brightness-gamma-correction]
+    Mat lookUpTable(1, 256, CV_8U);
+    uchar* p = lookUpTable.ptr();
+    for( int i = 0; i < 256; ++i)
+        p[i] = saturate_cast<uchar>(pow(i / 255.0, gamma_) * 255.0);
+
+    img_corrected = img.clone();
+    LUT(img, lookUpTable, img_corrected);
+    //! [changing-contrast-brightness-gamma-correction]
+}
+
+/*
+void automatic_brightness_and_contrast(image, clip_hist_percent=1):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+    # Calculate grayscale histogram
+    hist = cv2.calcHist([gray],[0],None,[256],[0,256])
+    hist_size = len(hist)
+
+    # Calculate cumulative distribution from the histogram
+    accumulator = []
+    accumulator.append(float(hist[0]))
+    for index in range(1, hist_size):
+        accumulator.append(accumulator[index -1] + float(hist[index]))
+
+    # Locate points to clip
+    maximum = accumulator[-1]
+    clip_hist_percent *= (maximum/100.0)
+    clip_hist_percent /= 2.0
+
+    # Locate left cut
+    minimum_gray = 0
+    while accumulator[minimum_gray] < clip_hist_percent:
+        minimum_gray += 1
+
+    # Locate right cut
+    maximum_gray = hist_size -1
+    while accumulator[maximum_gray] >= (maximum - clip_hist_percent):
+        maximum_gray -= 1
+
+    # Calculate alpha and beta values
+    alpha = 255 / (maximum_gray - minimum_gray)
+    beta = -minimum_gray * alpha
+
+    '''
+    # Calculate new histogram with desired range and show histogram 
+    new_hist = cv2.calcHist([gray],[0],None,[256],[minimum_gray,maximum_gray])
+    plt.plot(hist)
+    plt.plot(new_hist)
+    plt.xlim([0,256])
+    plt.show()
+    '''
+
+    auto_result = cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
+    return (auto_result, alpha, beta)
+*/
