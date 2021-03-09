@@ -110,19 +110,20 @@ std::string get_string_2(double x_, double y_){
     return res;
 }
 
-void projectPoints0(std::vector<cv::Point3d> &points, Mat &R, Vec3d &T, Mat &K, Mat &D, std::vector<cv::Point2d> &pixels, std::unordered_map<std::string, cv::Point3d> &u){
+void projectPoints0(std::vector<cv::Point3d> &points, Mat R, Vec3d T, Mat K, Mat D, std::vector<cv::Point2d> &pixels, std::unordered_map<std::string, cv::Point3d> &u){
     double fx, fy, cx, cy;
     fx = K.at<double>(0,0);
     fy = K.at<double>(1,1);
     cx = K.at<double>(0,2);
     cy = K.at<double>(1,2);
-    for (int i = 0; i < points.size(); i++){
+    size_t i;
+    for (i = 0; i < points.size(); i++){
         cv::Point3d point = points.at(i);
         double pixel[2];
-        pixel[0] = fx * point.x / z + cx;
-        pixel[1] = fy * point.y / z + cy;
-        pixels.at(i).x = pixel[0];
-        pixels.at(i).y = pixel[1];
+        pixel[0] = fx * point.x / point.z + cx;
+        pixel[1] = fy * point.y / point.z + cy;
+        Point2d out_pixel(pixel[0], pixel[1]);
+        pixels.push_back(out_pixel);
         std::string pixel_str = get_string_2(pixel[0], pixel[1]);
         u[pixel_str] = point;
     }

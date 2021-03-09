@@ -25,14 +25,14 @@ void register_glfw_callbacks(window& app, glfw_state& app_state);
 
 int main() {
     /*************** Some initialization stuff for RealSense **************/
-
+/*
     // Create a simple OpenGL window for rendering:
     window app(1280, 720, "RealSense Pointcloud Example");
     // Construct an object to manage view state
     glfw_state app_state;
     // register callbacks to allow manipulation of the pointcloud
     register_glfw_callbacks(app, app_state);
-
+*/
     rs2::pointcloud pc;
     rs2::points points_i;
 	rs2::points points;
@@ -45,7 +45,6 @@ int main() {
 	rs2::pipeline_profile profile;
 	rs2::colorizer color_map;
 	
-	std::vector<Point2d> pixels_c;
 	std::vector<Point3d> points_c;
 
 
@@ -101,7 +100,7 @@ int main() {
 	std::cout << "D = " << D << std::endl;
 
 
-    while (app) {
+    while (1) {
         // ----------------Wait for the next set of frames from RealSense
         auto frames = pipe.wait_for_frames();
         //auto depth = frames.get_depth_frame();
@@ -160,10 +159,11 @@ int main() {
 		Vec3d T_i(0,0,0);
         // transform points from infra1 frame to color frame
 		points_c = transform_points(R_c_i, T_c_i, points_i);
-
+        //std::cout << "here" <<std::endl;
         std::unordered_map<std::string, cv::Point3d> u;
+        std::vector<Point2d> pixels_c;
         projectPoints0(points_c, R_i, T_i, K, D, pixels_c, u);
-
+        std::cout << points_c.size() << ", " << pixels_c.size() << std::endl;
         // TODO Step 3: Find the 3D coordinate corresponding to 
         // the blob in 2D; average that, print
         std::cout << "num keypoints: " << keypoints.size() << std::endl;
@@ -212,15 +212,15 @@ int main() {
             }
         }
 
-        std::cout << "Pixel: " << best_point.x << ", " << best_point.y << "\tPoint: " << best_point.x << ", " << best_point.y << ", " << best_point.z << std::endl;
+        std::cout << "Pixel: " << best_pixel.x << ", " << best_pixel.y << "\tPoint: " << best_point.x << ", " << best_point.y << ", " << best_point.z << std::endl;
 
-
+/*
         // display colored point cloud
         Mat rsimagec_bgr;
         cvtColor(rsimagec_rgb, rsimagec_bgr, COLOR_RGB2BGR);
         app_state.tex.upload0(rsimagec_bgr);
         draw_pointcloud(app.width(), app.height(), app_state, points_c, pixels_c, points_i);
-
+*/
         // Press 'c' to capture frames
 
 		if( waitKey(1) == 'c' ) { // 0x20 (SPACE) ; need a small delay !! we use this to also add an exit option
