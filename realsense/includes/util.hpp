@@ -5,6 +5,7 @@
 #include <vector>
 #include <librealsense2/rs.hpp>
 #include <opencv2/opencv.hpp>
+#include <unordered_map>
 using namespace cv;
 
 rs2_extrinsics get_extrinsics(const rs2::stream_profile& from_stream, 
@@ -101,34 +102,30 @@ std::vector<cv::Point3d> transform_points(Mat R, Vec3d T, rs2::points from_point
     return outpoints;
 }
 
-cv::Point3d transform_point_to_point_1(Mat &R, Vec3d &T, rs2::vertex from_point)
-{   
-    double to_point[3];
-    for (int i = 0; i < 3; i++){
-        to_point[i] = R.at<double>(i,0) * from_point.x;
-        to_point[i] += R.at<double>(i,1) * from_point.y;
-        to_point[i] += R.at<double>(i,2) * from_point.z + T[i];
-    }
-    cv::Point3d outpoint(to_point[0], to_point[1], to_point[2]);
-    return outpoint;
+
+std::string get_string_2(double x_, double y_){
+    int x = (int)round(x_);
+    int y = (int)round(y_);
+    std::string res = std::to_string(x) + ", "  + std::to_string(y);
+    return res;
 }
 
-void transform_points_1(Mat &R, Vec3d &T, rs2::points &from_points, std::vector<cv::Point3d> &outpoints){
-    cv::Point3d outpoint;
-    size_t size = from_points.size();
-    const rs2::vertex *from_vertices = from_points.get_vertices();
-    for (size_t i = 0; i < size; i++){
-        outpoint = transform_point_to_point_1(R, T, from_vertices[i]);
-        outpoints.push_back(outpoint);
+void projectPoints0(std::vector<cv::Point3d> &points, Mat &R, Vec3d &T, Mat &K, Mat &D, std::vector<cv::Point2d> &pixels, std::unordered_map<std::string, cv::Point3d> &u){
+    double fx, fy, cx, cy;
+    fx = K.at<double>(0,0);
+    fy = K.at<double>(1,1);
+    cx = K.at<double>(0,2);
+    cy = K.at<double>(1,2);
+    for (int i = 0; i < points.size(); i++){
+        cv::Point3d point = points.at(i);
+        double pixel[2];
+        pixel[0] = fx * point.x / z + cx;
+        pixel[1] = fy * point.y / z + cy;
+        pixels.at(i).x = pixel[0];
+        pixels.at(i).y = pixel[1];
+        std::string pixel_str = get_string_2(pixel[0], pixel[1]);
+        u[pixel_str] = point;
     }
-}
-
-void projectPoints(std::vector<cv::Point3d> points,
-                   cv::Mat R, cv::Mat T, 
-                   cv::Mat K, cv::Mat D,
-                   std::vector<cv::Point2d> pixels)
-{
-
 }
 
 

@@ -161,7 +161,8 @@ int main() {
         // transform points from infra1 frame to color frame
 		points_c = transform_points(R_c_i, T_c_i, points_i);
 
-        projectPoints(points_c, R_i, T_i, K, D, pixels_c);
+        std::unordered_map<std::string, cv::Point3d> u;
+        projectPoints0(points_c, R_i, T_i, K, D, pixels_c, u);
 
         // TODO Step 3: Find the 3D coordinate corresponding to 
         // the blob in 2D; average that, print
@@ -172,33 +173,46 @@ int main() {
             continue;
         }
         KeyPoint best_keypoint;
+        Point3d best_point;
+        Point2d best_pixel;
         double min_z = 0;
         int best_point_idx = 0;
         for (int k = 0; k < keypoints.size(); k++){
-            KeyPoint curr_keypoint = keypoints[k];
+            KeyPoint curr_keypoint = keypoints.at(k);
             Point2d pixel = curr_keypoint.pt;
-            //std::cout << pixel.x << ", " << pixel.y << std::endl;
+            int pixel_x = (int)pixel.x;
+            int pixel_y = (int)pixel.y;
+            size_t area = curr_keypoint.size;
+            int r = (int)sqrt(area);
             double z = 0;
-            int i;
-            for (i = 0; i < pixels_c.size(); i++){
+            Point3d best_point_tmp;
+            Point2d best_pixel_tmp;
+            for (int i = -r; i < r+1; i++){
+                int x = pixel_x + i;
+                for (int j = -r; j < r+1; j++){
+                    int y = pixel_y + j;
+                    std::string key = get_string_2(x, y);
+                    auto got = u.find(key);
+                    if (got != u.end()){
+                        Point3d pgot = got->second;
+                        if (z == 0 || z > pgot.z){
+                            z = pgot.z;
+                            best_point_tmp = pgot;
+                            Point2d px((double)x, (double)y);
+                            best_pixel_tmp = px;
+                        }
+                    }
 
-                if (pixels_c[i].x - pixel.x < 2 && pixels_c[i].y - pixel.y < 2){
-                    z = points_c[i].z;
-                    break;
                 }
             }
             if (min_z == 0 || z < min_z){
                 min_z = z;
-                best_keypoint = curr_keypoint;
-                best_point_idx = i;
+                best_point = best_point_tmp;
+                best_pixel = best_pixel_tmp;
             }
         }
-        if (best_point_idx == 0){
-            std::cout << "bad" << std::endl;
-            continue;
-        }
-        Point3d best_point = points_c[best_point_idx];
-        std::cout << best_point.x << ", " << best_point.y << ", " << best_point.z << std::endl;
+
+        std::cout << "Pixel: " << best_point.x << ", " << best_point.y << "\tPoint: " << best_point.x << ", " << best_point.y << ", " << best_point.z << std::endl;
 
 
         // display colored point cloud
