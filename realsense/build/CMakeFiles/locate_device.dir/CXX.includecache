@@ -89,6 +89,8 @@ opencv2/opencv.hpp
 -
 unordered_map
 -
+queue
+-
 
 /home/tina-laptop/localFiles/courses/sea-cucumbers/vision/realsense/src/test_shuttlecock.cpp
 librealsense2/rs.hpp
@@ -118,6 +120,8 @@ sys/types.h
 sys/stat.h
 -
 linux/videodev2.h
+-
+math.h
 -
 
 /usr/local/include/GLFW/glfw3.h

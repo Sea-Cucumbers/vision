@@ -17,13 +17,15 @@
 #include <sys/stat.h>
 #include <linux/videodev2.h>
 
+#include <math.h>
+
 using namespace cv;
 
 // Helper functions
 void register_glfw_callbacks(window& app, glfw_state& app_state);
 
 
-int main() {
+int main(int argc, char *argv[]) {
     /*************** Some initialization stuff for RealSense **************/
 /*
     // Create a simple OpenGL window for rendering:
@@ -33,9 +35,34 @@ int main() {
     // register callbacks to allow manipulation of the pointcloud
     register_glfw_callbacks(app, app_state);
 */
+    // process cmd line args
+    if (argc != 2){
+        std::cout << "Error: Bad argument count" << std::endl;
+        return -1;
+    }
+    char *device_type_str = argv[1];
+    int device_type;
+    if (strcmp(device_type_str, "V1") == 0){
+        device_type = DEVICE_GATE;
+    }
+    else if (strcmp(device_type_str, "V2")==0)
+    {
+        device_type = DEVICE_LARGE;
+    }
+    else if (strcmp(device_type_str, "V3")==0)
+    {
+        device_type = DEVICE_SHUTTLECOCK;
+    }
+    else if (strcmp(device_type_str, "B")==0)
+    {
+        device_type = DEVICE_BREAKER;
+    }
+    else{
+        std::cout << "Error: No such device" << std::endl;
+        return -1;
+    }
+
     rs2::pointcloud pc;
-    rs2::points points_i;
-	rs2::points points;
     rs2::pipeline pipe;
 	rs2::config cfg;
 	cfg.enable_stream(RS2_STREAM_INFRARED, 1);
@@ -46,6 +73,53 @@ int main() {
 	rs2::colorizer color_map;
 	
 	std::vector<Point3d> points_c;
+
+    // using gamma corrected images
+    //Scalar blue_min(92, 63, 220);
+    //Scalar blue_max(105, 128,255);
+
+    // blue, original, circular
+    Scalar blue_min(95, 21, 153);
+    Scalar blue_max(110, 153,255);
+
+    // blue, original, shuttlecock
+    Scalar blue_min_2(98, 25, 160);
+    Scalar blue_max_2(110, 178,255);
+
+    // lime, original, spigot
+    Scalar lime_min(40, 64, 25);
+    Scalar lime_max(80, 204, 77);
+
+    // the ball valves , corrected
+    //Scalar blue2_min(92, 102, 77);
+    //Scalar blue2_max(105, 204, 255);
+
+    //Scalar blue3_min(92, 102, 63);
+    //Scalar blue3_max(100, 128, 255);
+
+
+    // orange, corrected
+    //Scalar orange_min(9,102,20);
+    //Scalar orange_max(15, 210, 255);
+
+    // orange, original
+    Scalar orange_min(5,77,102);
+    Scalar orange_max(15, 204, 255);
+
+    Scalar thresh_min, thresh_max;
+    if (device_type == DEVICE_BREAKER){
+        thresh_min = orange_min;
+        thresh_max = orange_max;
+    }
+    else if (device_type == DEVICE_SHUTTLECOCK){
+        thresh_min = blue_min_2;
+        thresh_max = blue_max_2;
+    }
+    else{
+        thresh_min = blue_min;
+        thresh_max = blue_max;
+    }
+
 
 
 	Mat rsimage_zoom;
@@ -118,21 +192,23 @@ int main() {
         Mat rsimage(Size(w, h), CV_8UC3, (void*)depth_frame.apply_filter(color_map).get_data(), Mat::AUTO_STEP);
 		//std::cout<<"good line281..."<<std::endl;
 		//imshow("Realsense colorized depth img", rsimage);
-	
+        rs2::points points_i;
         pc.map_to(color_frame);
         points_i = pc.calculate(depth_frame);
 
-        // TODO Step 1: Find colored blobs in colored frame, draw
+        // Step 1: Find colored blobs in colored frame, draw
         //For segmenting the image in RGB format.
         cvtColor(rsimagec, rsimagec_rgb, COLOR_BGR2RGB);
-        gammaCorrection(rsimagec_rgb, rsimagec_rgb, 0.45); // adjust brightness
+        //gammaCorrection(rsimagec_rgb, rsimagec_rgb, 0.45); // adjust brightness
         cvtColor(rsimagec_rgb, rsimagec_hls, COLOR_BGR2HLS);
-        //GaussianBlur(rsimagec, rsimagec_blurred, Size(5,5), 0, 0);
-        inRange(rsimagec_hls, cv::Scalar(0, 50, 35), cv::Scalar(50, 142, 255), mask1);
-        inRange(rsimagec_hls, cv::Scalar(160, 50, 35), cv::Scalar(180, 142, 255), mask2);
-        bitwise_or(mask1,  mask2, rsimagec_segmented); // blob is 255
-        //threshold(rsimagec_segmented, rsimagec_segmented, 0, 255, 1); // binary inverted
-        //GaussianBlur(rsimagec_segmented, rsimagec_segmented, Size(5,5), 0, 0);
+
+        // actual valves and breakers
+        inRange(rsimagec_hls, thresh_min, thresh_max, rsimagec_segmented);
+        if (device_type == DEVICE_GATE){
+            inRange(rsimagec_hls, lime_min, lime_max, mask2);
+            bitwise_or(rsimagec_segmented, mask2, rsimagec_segmented);
+        }
+
         Ptr<SimpleBlobDetector> detector = SimpleBlobDetector::create(params);
         // Detect blobs.
         std::vector<KeyPoint> keypoints;
@@ -143,23 +219,16 @@ int main() {
         // DrawMatchesFlags::DRAW_RICH_KEYPOINTS flag ensures the size of the circle corresponds to the size of blob
         Mat im_with_keypoints, rsimagec_segmented_rgb;
         cvtColor(rsimagec_segmented, rsimagec_segmented_rgb, COLOR_GRAY2RGB);
-        drawKeypoints(rsimagec_segmented_rgb, keypoints, im_with_keypoints, Scalar(0,255,0));
-        //DrawMatchesFlags::DRAW_RICH_KEYPOINTS 
+        drawKeypoints(rsimagec_segmented_rgb, keypoints, im_with_keypoints, Scalar(0,255,0), DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
         
-        // Show blobs
-        //imshow("image", rsimagec_segmented);
-        Mat buf2;
-		Mat imgarray[] = {rsimagec_rgb, im_with_keypoints};	
-        //Mat imgarray[] = {mask1, mask2};	
-	    hconcat(imgarray, 2, buf2);
-        imshow("image", buf2);
+
 
         // Step 2: Transform point could and project onto colored frame
         Mat R_i = Mat::eye(3,3,CV_64F);
 		Vec3d T_i(0,0,0);
         // transform points from infra1 frame to color frame
+        rs2::points points;
 		points_c = transform_points(R_c_i, T_c_i, points_i);
-        //std::cout << "here" <<std::endl;
         std::unordered_map<std::string, cv::Point3d> u;
         std::vector<Point2d> pixels_c;
         projectPoints0(points_c, R_i, T_i, K, D, pixels_c, u);
@@ -169,24 +238,30 @@ int main() {
         std::cout << "num keypoints: " << keypoints.size() << std::endl;
 
         if (keypoints.size() == 0){
-            std::cout << "bad!" << std::endl;
+            std::cout << "no keypoint" << std::endl;
             continue;
         }
+
+        // we compute and store the L2 distance and z value of each keypoint
         KeyPoint best_keypoint;
         Point3d best_point;
         Point2d best_pixel;
         double min_z = 0;
         int best_point_idx = 0;
+        std::priority_queue<Blob> blob_pq;
         for (int k = 0; k < keypoints.size(); k++){
             KeyPoint curr_keypoint = keypoints.at(k);
             Point2d pixel = curr_keypoint.pt;
             int pixel_x = (int)pixel.x;
             int pixel_y = (int)pixel.y;
             size_t area = curr_keypoint.size;
-            int r = (int)sqrt(area);
+            int r = (int)sqrt(area) + 15;
             double z = 0;
-            Point3d best_point_tmp;
-            Point2d best_pixel_tmp;
+            cv::Point3d best_point_tmp;
+            cv::Point2d best_pixel_tmp;
+            double best_dist_tmp;
+            // check every pixel in the blob, find 3D coords
+            // and get one 3D coord representing the blob
             for (int i = -r; i < r+1; i++){
                 int x = pixel_x + i;
                 for (int j = -r; j < r+1; j++){
@@ -200,19 +275,129 @@ int main() {
                             best_point_tmp = pgot;
                             Point2d px((double)x, (double)y);
                             best_pixel_tmp = px;
+                            best_dist_tmp = sqrt(pgot.x * pgot.x + pgot.y * pgot.y + z * z);
                         }
                     }
 
                 }
             }
+            // push the blob to pq
+            Blob blob(best_dist_tmp, best_point_tmp, best_pixel_tmp, curr_keypoint);
+            blob_pq.push(blob);
+            // check if this blob is the closest
+            /*
             if (min_z == 0 || z < min_z){
                 min_z = z;
                 best_point = best_point_tmp;
                 best_pixel = best_pixel_tmp;
             }
+            */
+        }
+        std::vector<Blob> breakers;
+        Blob best_blob;
+        // for valves, we find one best keypoint
+        if (device_type != DEVICE_BREAKER){
+            best_blob = blob_pq.top();
+            blob_pq.pop();
+            std::cout << "Pixel: " << best_blob.pixel.x << ", " << best_blob.pixel.y << "\tPoint: " << best_blob.point.x << ", " << best_blob.point.y << ", " << best_blob.point.z << std::endl;
+        }
+        // for breakers, we find 3 best keypoints from PQ
+        else {
+            for (int i = 0; i < 3; i++){
+                best_blob = blob_pq.top();
+                breakers.push_back(best_blob);
+                blob_pq.pop();
+                std::cout << "Breaker " << i << ": " <<std::endl;
+                std::cout << "Pixel: " << best_blob.pixel.x << ", " << best_blob.pixel.y << "\tPoint: " << best_blob.point.x << ", " << best_blob.point.y << ", " << best_blob.point.z << std::endl;
+            }
+            std::cout << std::endl;
         }
 
-        std::cout << "Pixel: " << best_pixel.x << ", " << best_pixel.y << "\tPoint: " << best_point.x << ", " << best_point.y << ", " << best_point.z << std::endl;
+
+
+        //// Determine valve configuration (vertically/horizontally mounted)
+        Mat rethresh_mask = Mat::zeros(Size(w1, h1), CV_8UC1);
+        Mat rsimage_rethreshed;
+        // if it's a shuttlecock valve, we just check its #pixels
+        if (device_type == DEVICE_SHUTTLECOCK){
+            std::cout << best_blob.keypoint.size << std::endl;
+            if (best_blob.keypoint.size < 45){
+                std::cout << "Vertical" << std::endl;
+            }
+            else{
+                std::cout << "Horizontal" << std::endl;
+            }
+        }
+
+        // else if it's a circular valve:
+        else if (device_type == DEVICE_GATE || device_type == DEVICE_LARGE){
+            // re-threshold the image. we only keep the valve of interest
+            int r;
+            if (device_type == DEVICE_GATE){
+                r = 60;
+            }
+            else if (device_type == DEVICE_LARGE){
+                r = 170;
+            }
+            int xc, yc;
+            xc = best_blob.pixel.x;
+            yc = best_blob.pixel.y;
+            cv::rectangle(rethresh_mask, Point(xc-r, yc-r), Point(xc+r, yc+r), 255, FILLED);
+            bitwise_and(rethresh_mask, rsimagec_segmented, rsimage_rethreshed);
+
+            // find its contours and fit an ellipse
+            std::vector<std::vector<cv::Point>> contours;
+            findContours(rsimage_rethreshed, contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+            if (contours.size() == 0) {
+                std::cout << "No contour!" << std::endl;
+                continue;
+            }
+            double best_area = cv::contourArea(contours[0]);
+            size_t best_idx = 0;
+            for (size_t i = 1; i < contours.size(); i++) {
+                double area = cv::contourArea(contours[i]);
+                if (area > best_area) {
+                best_idx = i;
+                best_area = area;
+                }
+            }
+            if (contours[best_idx].size() < 5) {
+                continue;
+            }
+            cv::RotatedRect ell = fitEllipse(contours[best_idx]);
+            cv::ellipse(rsimagec_rgb, ell, cv::Scalar(0, 255, 0), 5);
+
+            // check the bounding box's shape
+            float wid = ell.size.width;
+            float hei = ell.size.height;
+            float ratio = get_rect_ratio(wid, hei);
+            std::cout << ratio << std::endl;
+            if (ratio < 0.4){
+                std::cout << "Vertical" << std::endl;
+            }
+            else {
+                std::cout << "Horizontal" << std::endl;
+            }
+        }
+        // Show blobs
+        Mat buf2;
+        //Mat rsimagec_rgb_backup;
+        //cvtColor(rsimagec, rsimagec_rgb_backup, COLOR_BGR2RGB);
+		Mat imgarray[] = {rsimagec_rgb, im_with_keypoints};	
+	    hconcat(imgarray, 2, buf2);
+        imshow("image", buf2);
+
+        //// Determine breaker state (up/down)
+
+
+        // Press 'c' to capture frames
+
+		if( waitKey(1) == 'c' ) { // 0x20 (SPACE) ; need a small delay !! we use this to also add an exit option
+			printf("Capturing frames %d...\n", frame_num);
+			sprintf(filename_rs, "../samples/red/new_%04d.png", frame_num);
+            imwrite(filename_rs, buf2);
+            frame_num++;
+		}
 
 /*
         // display colored point cloud
@@ -221,14 +406,6 @@ int main() {
         app_state.tex.upload0(rsimagec_bgr);
         draw_pointcloud(app.width(), app.height(), app_state, points_c, pixels_c, points_i);
 */
-        // Press 'c' to capture frames
-
-		if( waitKey(1) == 'c' ) { // 0x20 (SPACE) ; need a small delay !! we use this to also add an exit option
-			printf("Capturing frames %d...\n", frame_num);
-			sprintf(filename_rs, "../samples/red/red_%04d.png", frame_num);
-            imwrite(filename_rs, rsimagec_rgb);
-            frame_num++;
-		}
 
 		
         // Press 'q' to exit

@@ -6,7 +6,43 @@
 #include <librealsense2/rs.hpp>
 #include <opencv2/opencv.hpp>
 #include <unordered_map>
+#include <queue>
+
 using namespace cv;
+
+#define DEVICE_GATE 0 // V1
+#define DEVICE_LARGE 1 // V2
+#define DEVICE_SHUTTLECOCK 2 // V3
+#define DEVICE_BREAKER  3 // B
+
+
+// data structure to store each blob
+class Blob {
+public:
+    double dist; // L2 distance
+    cv::Point3d point;
+    cv::Point2d pixel;
+    cv::KeyPoint keypoint;
+    Blob();
+    Blob(double dist_, Point3d point_, Point2d pixel_, KeyPoint keypoint_);
+
+    friend bool operator<(const Blob& b1, const Blob& b2) {
+        if(b1.dist > b2.dist)
+            return true;
+        return false;
+    }
+};
+
+Blob::Blob() {
+}
+
+Blob::Blob(double dist_, cv::Point3d point_, cv::Point2d pixel_, cv::KeyPoint keypoint_) {
+   dist = dist_;
+   point = point_;
+   pixel = pixel_;
+   keypoint = keypoint_;
+}
+
 
 rs2_extrinsics get_extrinsics(const rs2::stream_profile& from_stream, 
                     const rs2::stream_profile& to_stream){
@@ -204,17 +240,25 @@ void init_bolb_detector_params(SimpleBlobDetector::Params &params){
     params.blobColor = 255;
     // Filter by Area.
     params.filterByArea = true;
-    params.minArea = 100;
-    params.maxArea = 4000;
+    params.minArea = 50;
+    params.maxArea = 7000;
     // Filter by Circularity
     params.filterByCircularity = false;
-    params.minCircularity = 0.2;
+    //params.minCircularity = 0.2;
     // Filter by Convexity
-    params.filterByConvexity = true;
-    params.minConvexity = 0.9;
+    params.filterByConvexity = false;
+    //params.minConvexity = 0.9;
     // Filter by Inertia
-    params.filterByInertia = true;
-    params.minInertiaRatio = 0.5;
+    params.filterByInertia = false;
+    //params.minInertiaRatio = 0.5;
+}
+
+float get_rect_ratio(float wid, float hei){
+    if (wid > hei)
+        return hei / wid;
+    else
+        return wid / hei;
+    
 }
 
 void gammaCorrection(const Mat &img, Mat &img_corrected, const double gamma_){
