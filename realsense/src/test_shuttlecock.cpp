@@ -79,8 +79,8 @@ int main(int argc, char *argv[]) {
     //Scalar blue_max(105, 128,255);
 
     // blue, original, circular
-    Scalar blue_min(95, 21, 153);
-    Scalar blue_max(110, 153,255);
+    Scalar blue_min(95, 21, 191);
+    Scalar blue_max(110, 120,255);
 
     // blue, original, shuttlecock
     Scalar blue_min_2(98, 25, 160);
@@ -255,7 +255,7 @@ int main(int argc, char *argv[]) {
             int pixel_x = (int)pixel.x;
             int pixel_y = (int)pixel.y;
             size_t area = curr_keypoint.size;
-            int r = (int)sqrt(area) + 15;
+            int r = (int)sqrt(area);
             double z = 0;
             cv::Point3d best_point_tmp;
             cv::Point2d best_pixel_tmp;
@@ -318,27 +318,29 @@ int main(int argc, char *argv[]) {
         //// Determine valve configuration (vertically/horizontally mounted)
         Mat rethresh_mask = Mat::zeros(Size(w1, h1), CV_8UC1);
         Mat rsimage_rethreshed;
-        // if it's a shuttlecock valve, we just check its #pixels
-        if (device_type == DEVICE_SHUTTLECOCK){
-            std::cout << best_blob.keypoint.size << std::endl;
-            if (best_blob.keypoint.size < 45){
-                std::cout << "Vertical" << std::endl;
+        int r;
+        int device_config;
+        int device_state;
+        // if it's a valve:
+        if (device_type != DEVICE_BREAKER){
+            r = 100;
+            // if it's a shuttlecock valve, we just check its #pixels
+            if (device_type == DEVICE_SHUTTLECOCK){
+                std::cout << best_blob.keypoint.size << std::endl;
+                if (best_blob.keypoint.size < 45){
+                    device_config = DEVICE_VERTICAL;
+                }
+                else{
+                    device_config = DEVICE_HORIZONTAL;
+                }
             }
-            else{
-                std::cout << "Horizontal" << std::endl;
-            }
-        }
-
-        // else if it's a circular valve:
-        else if (device_type == DEVICE_GATE || device_type == DEVICE_LARGE){
-            // re-threshold the image. we only keep the valve of interest
-            int r;
-            if (device_type == DEVICE_GATE){
-                r = 60;
+            else if (device_type == DEVICE_GATE){
+                r = 90;
             }
             else if (device_type == DEVICE_LARGE){
                 r = 170;
             }
+            // re-threshold the image. we only keep the valve of interest
             int xc, yc;
             xc = best_blob.pixel.x;
             yc = best_blob.pixel.y;
@@ -371,14 +373,79 @@ int main(int argc, char *argv[]) {
             float wid = ell.size.width;
             float hei = ell.size.height;
             float ratio = get_rect_ratio(wid, hei);
-            std::cout << ratio << std::endl;
-            if (ratio < 0.4){
-                std::cout << "Vertical" << std::endl;
+            std::cout << "Ratio: " << ratio << std::endl;
+            if (device_type != DEVICE_SHUTTLECOCK){
+                if (ratio < 0.4){
+                    device_config = DEVICE_VERTICAL;
+                }
+                else {
+                    device_config = DEVICE_HORIZONTAL;
+                }
             }
-            else {
-                std::cout << "Horizontal" << std::endl;
+            else{ // shuttlecock, we also determine device state
+                if (device_config == DEVICE_HORIZONTAL){
+                    // check bounding rec
+                    Rect br = ell.boundingRect();
+                    if (br.width > br.height)
+                        device_state = VALVE_CLOSED;
+                    else
+                        device_state = VALVE_OPEN;
+
+                }
+                else{ // we count the #pixels
+                    if (best_blob.keypoint.size > 30)
+                        device_state = VALVE_OPEN;
+                    else
+                        device_state = VALVE_CLOSED;
+                }
             }
+            std::cout << get_valve_string(device_config, device_state, device_type) << std::endl;
         }
+        else{
+            int breaker_state[3];
+            //// Determine breaker state (up/down)
+            // sort based on pixel x
+            Blob breaker[3];
+            double x_1, x_2, x_3;
+            double min_x = -1;
+            int b1_idx = 0;
+            double max_x = -1;
+            int b3_idx = 0;
+            int b2_idx = 0;
+            bool isb1b3[3] = {false, false, false};
+            for (int i = 0; i < 3; i++){
+                double cur_x = breakers.at(i).pixel.x;
+                if (min_x == -1 || cur_x < min_x){
+                    min_x = cur_x;
+                    b1_idx = i;
+                }
+                if (max_x == -1 || cur_x > max_x){
+                    max_x = cur_x;
+                    b3_idx = i;
+                }
+            }
+            isb1b3[b1_idx] = true;
+            isb1b3[b3_idx] = true;
+            breaker[0] = breakers.at(b1_idx);
+            breaker[2] = breakers.at(b3_idx);
+            for (int i = 0; i < 3; i++){
+                if(isb1b3[i] == false)
+                    b2_idx = i;
+            }
+            breaker[1] = breakers.at(b2_idx);
+            // draw text on the breakders 
+            for (int i = 0; i < 3; i++){
+                std::string tx = "B" + std::to_string(i+1);
+                putText(rsimagec_rgb, tx, breaker[i].pixel, FONT_HERSHEY_SIMPLEX, 2,Scalar(0,255,0), 3);
+                if (breaker[i].point.y < -0.05)
+                    breaker_state[i] = BREAKER_UP;
+                else
+                    breaker_state[i] = BREAKER_DOWN;
+            }
+            std::cout << get_breaker_string(breaker_state[0]) << ", " << get_breaker_string(breaker_state[1]) << ", " << get_breaker_string(breaker_state[2]) << std::endl;
+        }
+
+
         // Show blobs
         Mat buf2;
         //Mat rsimagec_rgb_backup;
@@ -387,11 +454,8 @@ int main(int argc, char *argv[]) {
 	    hconcat(imgarray, 2, buf2);
         imshow("image", buf2);
 
-        //// Determine breaker state (up/down)
-
 
         // Press 'c' to capture frames
-
 		if( waitKey(1) == 'c' ) { // 0x20 (SPACE) ; need a small delay !! we use this to also add an exit option
 			printf("Capturing frames %d...\n", frame_num);
 			sprintf(filename_rs, "../samples/red/new_%04d.png", frame_num);

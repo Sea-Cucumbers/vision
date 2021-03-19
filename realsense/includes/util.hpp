@@ -15,6 +15,15 @@ using namespace cv;
 #define DEVICE_SHUTTLECOCK 2 // V3
 #define DEVICE_BREAKER  3 // B
 
+#define DEVICE_VERTICAL 100 // facing up
+#define DEVICE_HORIZONTAL 101// facing the front
+
+#define VALVE_OPEN 102 // in line with pipe
+#define VALVE_CLOSED 103 // perpendicular to pipe 
+
+#define BREAKER_UP 104
+#define BREAKER_DOWN 105
+
 
 // data structure to store each blob
 class Blob {
@@ -43,6 +52,29 @@ Blob::Blob(double dist_, cv::Point3d point_, cv::Point2d pixel_, cv::KeyPoint ke
    keypoint = keypoint_;
 }
 
+std::string get_valve_string(int device_config, int device_state, int device_type){
+    std::string str1, str2;
+    if (device_config == DEVICE_HORIZONTAL)
+        str1 = "Horizontal";
+    else
+        str1 = "Vertical";
+    if (device_type == DEVICE_SHUTTLECOCK){
+        if(device_state == VALVE_OPEN)
+            str2 = "Open";
+        else
+            str2 = "Closed";
+        return str1 + ", " + str2;
+    }
+    return str1;
+}
+
+
+std::string get_breaker_string(int a){
+    if (a == BREAKER_UP)
+        return "UP";
+    else
+        return "DOWN";
+}
 
 rs2_extrinsics get_extrinsics(const rs2::stream_profile& from_stream, 
                     const rs2::stream_profile& to_stream){
