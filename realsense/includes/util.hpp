@@ -24,6 +24,9 @@ using namespace cv;
 #define BREAKER_UP 104
 #define BREAKER_DOWN 105
 
+#define BREAKER_A 106
+#define BREAKER_B 107
+
 
 // data structure to store each blob
 class Blob {

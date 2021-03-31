@@ -42,6 +42,7 @@ int main(int argc, char *argv[]) {
     }
     char *device_type_str = argv[1];
     int device_type;
+    int breaker_type;
     if (strcmp(device_type_str, "V1") == 0){
         device_type = DEVICE_GATE;
     }
@@ -53,9 +54,14 @@ int main(int argc, char *argv[]) {
     {
         device_type = DEVICE_SHUTTLECOCK;
     }
-    else if (strcmp(device_type_str, "B")==0)
+    else if (strcmp(device_type_str, "A")==0)
     {
         device_type = DEVICE_BREAKER;
+        breaker_type = BREAKER_A;
+    }
+    else if (strcmp(device_type_str, "B")==0){
+        device_type = DEVICE_BREAKER;
+        breaker_type = BREAKER_B;
     }
     else{
         std::cout << "Error: No such device" << std::endl;
@@ -105,6 +111,10 @@ int main(int argc, char *argv[]) {
     // orange, original
     Scalar orange_min(5,77,102);
     Scalar orange_max(15, 204, 255);
+
+    // black, original, rgb
+    Scalar black_min(0,0,0);
+    Scalar black_max(40, 45, 60);
 
     Scalar thresh_min, thresh_max;
     if (device_type == DEVICE_BREAKER){
@@ -433,14 +443,160 @@ int main(int argc, char *argv[]) {
                     b2_idx = i;
             }
             breaker[1] = breakers.at(b2_idx);
+
+            Mat black_mask;
+            inRange(rsimagec_rgb, black_min, black_max, black_mask);
+            bitwise_or(black_mask, rsimagec_segmented, rsimagec_segmented);
+            // check b1 and b3 position to find roi
+            double dx = (breaker[2].pixel.x - breaker[0].pixel.x)/5;
+            std::cout << dx << std::endl;
             // draw text on the breakders 
             for (int i = 0; i < 3; i++){
-                std::string tx = "B" + std::to_string(i+1);
-                putText(rsimagec_rgb, tx, breaker[i].pixel, FONT_HERSHEY_SIMPLEX, 2,Scalar(0,255,0), 3);
+                // determine breaker state
+                // this code is not robust
+                /*
                 if (breaker[i].point.y < -0.05)
                     breaker_state[i] = BREAKER_UP;
                 else
                     breaker_state[i] = BREAKER_DOWN;
+                */
+                std::cout << "here" << std::endl;
+                Mat breaker_pic;
+                Rect breaker_roi;
+                Point up_left;
+                Point bot_right;
+                int x0, y0, x1, y1;
+                if (i == 0 || i == 2 || i== 1){
+                    x0 = (int)(breaker[i].pixel.x - dx/1.7);
+                    if (x0 < 0)
+                        x0 = 0;
+                    y0 = (int)(breaker[i].pixel.y - dx*2.7);
+                    if (y0 < 0) 
+                        y0 = 0;
+                    x1 = (int)(breaker[i].pixel.x + dx/1.7);
+                    if (x1 >= w1)
+                        x1 = w1-1;
+                    y1 = (int)(breaker[i].pixel.y + dx*3);
+                    if (y1 > h1-1)
+                        y1 = h1-1;
+                }
+               /* else if (i == 1){
+                    x0 = (int)(breaker[i].pixel.x - dx*1.5);
+                    if (x0 < 0)
+                        x0 = 0;
+                    y0 = (int)(breaker[i].pixel.y - dx*2.7);
+                    if (y0 < 0) 
+                        y0 = 0;
+                    x1 = (int)(breaker[i].pixel.x + dx*1.5);
+                    if (x1 >= w1)
+                        x1 = w1-1;
+                    y1 = (int)(breaker[i].pixel.y + dx*4);
+                    if (y1 > h1-1)
+                        y1 = h1-1;
+                }*/
+                up_left = Point2i(x0, y0);
+                bot_right = Point2i(x1, y1);
+                breaker_roi = Rect(up_left, bot_right);
+                rectangle(im_with_keypoints, breaker_roi, Scalar(255, 0,0),2);
+                breaker_pic = rsimagec_segmented(breaker_roi);
+/*
+                breaker_pic = rsimagec_segmented(breaker_roi);
+                // alternative way:
+                blur(breaker_pic, breaker_pic, Size(3,3));
+                Mat canny_output;
+                Canny( breaker_pic, canny_output, 60, 180);
+                std::vector<std::vector<Point>> contours_;
+                findContours( canny_output, contours_, RETR_TREE, CHAIN_APPROX_SIMPLE );
+                std::vector<std::vector<Point>> contours_poly(contours_.size() );
+                std::vector<Rect> boundRect( contours_.size() );
+                std::vector<Point2f>centers( contours_.size() );
+                std::vector<float>radius( contours_.size() );
+                for( size_t a = 0; a < contours_.size(); a++ )
+                {
+                    approxPolyDP( contours_[a], contours_poly[a], 3, true );
+                    boundRect[a] = boundingRect( contours_poly[a] );
+                    minEnclosingCircle( contours_poly[a], centers[a], radius[a] );
+                }
+                double best_area = cv::contourArea(contours_[0]);
+                size_t best_idx = 0;
+                for (size_t i = 1; i < contours_.size(); i++) {
+                    double area = cv::contourArea(contours_[i]);
+                    if (area > best_area) {
+                    best_idx = i;
+                    best_area = area;
+                    }
+                }
+                Rect br = boundRect[best_idx];
+*/
+/*
+                // fit ellipse, find rect upper and lower bound
+                std::vector<std::vector<cv::Point>> contours;
+                findContours(breaker_pic, contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
+                if (contours.size() == 0) {
+                    std::cout << "No contour!" << std::endl;
+                    continue;
+                }
+                double best_area = cv::contourArea(contours[0]);
+                size_t best_idx = 0;
+                for (size_t i = 1; i < contours.size(); i++) {
+                    double area = cv::contourArea(contours[i]);
+                    if (area > best_area) {
+                    best_idx = i;
+                    best_area = area;
+                    }
+                }
+                if (contours[best_idx].size() < 5) {
+                    continue;
+                }
+                cv::RotatedRect ell = fitEllipse(contours[best_idx]);
+                Rect br = ell.boundingRect();
+
+                int upper = br.tl().y + breaker_roi.tl().y;
+                int lower = br.br().y + breaker_roi.tl().y;
+                int left = br.tl().x + breaker_roi.tl().x;
+                int right = br.br().x + breaker_roi.br().x;
+*/
+
+                // alternatively, we look at the roi and check for the bound
+                int white_idx_top, white_idx_bot;
+                for (int g = 0; g < breaker_roi.height; g+= 3){
+                    if(breaker_pic.at<uchar>(g, (int)breaker[i].pixel.x - breaker_roi.tl().x) > 0 && g >= 40){
+                        white_idx_top = g;
+                        break;
+                    }
+                }
+                for (int g = breaker_roi.height-1; g >= 0; g-= 3){
+                    if(breaker_pic.at<uchar>(g, (int)breaker[i].pixel.x - breaker_roi.tl().x) > 0){
+                        white_idx_bot = g;
+                        break;
+                    }
+                }
+                int upper = white_idx_top + breaker_roi.tl().y;
+                int lower = white_idx_bot + breaker_roi.tl().y;
+                int left = breaker_roi.tl().x - 15;
+                int right = breaker_roi.br().x + 15;
+                rectangle(im_with_keypoints, Rect(Point2i(left, upper), Point2i(right, lower)), Scalar(0,0,255), 2);
+                int dy_up = abs(upper - (int)breaker[i].keypoint.pt.y);
+                int dy_low = abs(lower - (int)breaker[i].keypoint.pt.y);
+                std::cout << (float)dy_up / dy_low << std::endl;
+                if (breaker_type == BREAKER_A){
+                    if((float)dy_up / dy_low < 0.35)
+                        breaker_state[i] = BREAKER_UP;
+                    else
+                        breaker_state[i] = BREAKER_DOWN;
+                }
+                else if (breaker_type == BREAKER_B){
+                    if((float)dy_low / dy_up < 0.35)
+                        breaker_state[i] = BREAKER_DOWN;
+                    else
+                        breaker_state[i] = BREAKER_UP;
+                }
+                std::string tx;
+                if (breaker_state[i] == BREAKER_UP)
+                    tx = "U" + std::to_string(i+1);
+                else
+                    tx = "D" + std::to_string(i+1);
+                putText(rsimagec_rgb, tx, breaker[i].pixel, FONT_HERSHEY_SIMPLEX, 2,Scalar(0,255,0), 3);
             }
             std::cout << get_breaker_string(breaker_state[0]) << ", " << get_breaker_string(breaker_state[1]) << ", " << get_breaker_string(breaker_state[2]) << std::endl;
         }
@@ -450,8 +606,9 @@ int main(int argc, char *argv[]) {
         Mat buf2;
         //Mat rsimagec_rgb_backup;
         //cvtColor(rsimagec, rsimagec_rgb_backup, COLOR_BGR2RGB);
-		Mat imgarray[] = {rsimagec_rgb, im_with_keypoints};	
-	    hconcat(imgarray, 2, buf2);
+        cvtColor(rsimagec_segmented, rsimagec_segmented_rgb, COLOR_RGBA2RGB);
+		Mat imgarray[] = {rsimagec_rgb, im_with_keypoints, rsimagec_segmented_rgb};	
+	    hconcat(imgarray, 3, buf2);
         imshow("image", buf2);
 
 
