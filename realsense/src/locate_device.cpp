@@ -243,7 +243,7 @@ int main(int argc, char *argv[]) {
         std::vector<Point2d> pixels_c;
         projectPoints0(points_c, R_i, T_i, K, D, pixels_c, u);
         std::cout << points_c.size() << ", " << pixels_c.size() << std::endl;
-        // TODO Step 3: Find the 3D coordinate corresponding to 
+        // Step 3: Find the 3D coordinate corresponding to 
         // the blob in 2D; average that, print
         std::cout << "num keypoints: " << keypoints.size() << std::endl;
 

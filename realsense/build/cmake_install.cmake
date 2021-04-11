@@ -1,4 +1,4 @@
-# Install script for directory: /home/tina-laptop/localFiles/courses/sea-cucumbers/vision/realsense
+# Install script for directory: /home/pi/sea-cucumbers/vision/realsense
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -52,12 +52,12 @@ if("x${CMAKE_INSTALL_COMPONENT}x" STREQUAL "xUnspecifiedx" OR NOT CMAKE_INSTALL_
   if(CMAKE_ERROR_ON_ABSOLUTE_INSTALL_DESTINATION)
     message(FATAL_ERROR "ABSOLUTE path INSTALL DESTINATION forbidden (by caller): ${CMAKE_ABSOLUTE_DESTINATION_FILES}")
   endif()
-file(INSTALL DESTINATION "/usr/local/bin" TYPE EXECUTABLE FILES "/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/realsense/build/locate_device")
+file(INSTALL DESTINATION "/usr/local/bin" TYPE EXECUTABLE FILES "/home/pi/sea-cucumbers/vision/realsense/build/locate_device")
   if(EXISTS "$ENV{DESTDIR}/usr/local/bin/locate_device" AND
      NOT IS_SYMLINK "$ENV{DESTDIR}/usr/local/bin/locate_device")
     file(RPATH_CHANGE
          FILE "$ENV{DESTDIR}/usr/local/bin/locate_device"
-         OLD_RPATH "/usr/local/lib:"
+         OLD_RPATH "/usr/local/lib:/opt/opencv-4.1.0/lib:"
          NEW_RPATH "")
     if(CMAKE_INSTALL_DO_STRIP)
       execute_process(COMMAND "/usr/bin/strip" "$ENV{DESTDIR}/usr/local/bin/locate_device")
@@ -73,5 +73,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/realsense/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/pi/sea-cucumbers/vision/realsense/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
