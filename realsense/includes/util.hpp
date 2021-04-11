@@ -10,22 +10,33 @@
 
 using namespace cv;
 
+// device types
 #define DEVICE_GATE 0 // V1
 #define DEVICE_LARGE 1 // V2
 #define DEVICE_SHUTTLECOCK 2 // V3
 #define DEVICE_BREAKER  3 // B
+// breakers A and B differs, so we have 2 cases
+#define BREAKER_A 106
+#define BREAKER_B 107
 
+// valve configuration
 #define DEVICE_VERTICAL 100 // facing up
 #define DEVICE_HORIZONTAL 101// facing the front
 
+// shuttlecock state
 #define VALVE_OPEN 102 // in line with pipe
 #define VALVE_CLOSED 103 // perpendicular to pipe 
 
+// breaker state
 #define BREAKER_UP 104
 #define BREAKER_DOWN 105
 
-#define BREAKER_A 106
-#define BREAKER_B 107
+// error code
+#define ERROR_BAD_ARGCNT 200
+#define ERROR_BAD_TYPE 201
+#define ERROR_BAD_DISPLAY 202
+#define ERROR_BAD_FRAME 203 // allows the pipeline to continue
+
 
 
 // data structure to store each blob

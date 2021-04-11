@@ -36,13 +36,40 @@ int main(int argc, char *argv[]) {
     register_glfw_callbacks(app, app_state);
 */
     // process cmd line args
-    if (argc != 2){
+    int error = 0;
+
+    if (argc != 3){
         std::cout << "Error: Bad argument count" << std::endl;
+        error = ERROR_BAD_ARGCNT;
         return -1;
     }
     char *device_type_str = argv[1];
+    char *displayImage_str = argv[2];
+
+    int displayImage = 0;
     int device_type;
     int breaker_type;
+
+    // some output 
+    int device_config; // horizontal or vertical valve
+    int device_state;  // shuttlecock open/closed 
+    int breaker_state[3]; // up or down
+    std::vector<Point3d> breaker_coords;
+    Point3d valve_coord;
+    
+
+    if (strcmp(displayImage_str, "1") == 0){
+        displayImage = 1;
+    }
+    else if (strcmp(displayImage_str, "0") == 0){
+        displayImage = 0;
+    }
+    else {
+        std::cout << "Error: No such display mode" << std::endl;
+        error = ERROR_BAD_DISPLAY;
+        return -1;
+    }
+
     if (strcmp(device_type_str, "V1") == 0){
         device_type = DEVICE_GATE;
     }
@@ -64,7 +91,8 @@ int main(int argc, char *argv[]) {
         breaker_type = BREAKER_B;
     }
     else{
-        std::cout << "Error: No such device" << std::endl;
+        std::cout << "Error: No such device type" << std::endl;
+        error = ERROR_BAD_TYPE;
         return -1;
     }
 
@@ -164,7 +192,7 @@ int main(int argc, char *argv[]) {
 	}
 	std::cout << "Device found!" << std::endl;
 
-    // Find camera parameters
+    // Find camera parameters, print them out
     auto ir1_stream = profile.get_stream(RS2_STREAM_DEPTH).as<rs2::stream_profile>();
 	auto color_stream = profile.get_stream(RS2_STREAM_COLOR).as<rs2::stream_profile>();
 	rs2_extrinsics extrinsics = get_extrinsics(ir1_stream, color_stream);
@@ -183,11 +211,11 @@ int main(int argc, char *argv[]) {
 	std::cout << "K = " << K << std::endl;
 	std::cout << "D = " << D << std::endl;
 
-
+    // main loop
     while (1) {
+        error = 0;
         // ----------------Wait for the next set of frames from RealSense
         auto frames = pipe.wait_for_frames();
-        //auto depth = frames.get_depth_frame();
 
 		rs2::frame depth_frame = frames.get_depth_frame();
 		rs2::frame color_frame = frames.get_color_frame();
@@ -196,12 +224,11 @@ int main(int argc, char *argv[]) {
         const int h = depth_frame.as<rs2::video_frame>().get_height();
 		const int w1 = color_frame.as<rs2::video_frame>().get_width();
         const int h1 = color_frame.as<rs2::video_frame>().get_height();
-		//std::cout << w1<<",  " << h1 << std::endl;
+
         // Create OpenCV matrix of size (w,h) from the colorized depth data
 		Mat rsimagec(Size(w1, h1), CV_8UC3, (void*)color_frame.get_data(), Mat::AUTO_STEP);
         Mat rsimage(Size(w, h), CV_8UC3, (void*)depth_frame.apply_filter(color_map).get_data(), Mat::AUTO_STEP);
-		//std::cout<<"good line281..."<<std::endl;
-		//imshow("Realsense colorized depth img", rsimage);
+
         rs2::points points_i;
         pc.map_to(color_frame);
         points_i = pc.calculate(depth_frame);
@@ -243,12 +270,14 @@ int main(int argc, char *argv[]) {
         std::vector<Point2d> pixels_c;
         projectPoints0(points_c, R_i, T_i, K, D, pixels_c, u);
         std::cout << points_c.size() << ", " << pixels_c.size() << std::endl;
+
         // Step 3: Find the 3D coordinate corresponding to 
         // the blob in 2D; average that, print
         std::cout << "num keypoints: " << keypoints.size() << std::endl;
 
         if (keypoints.size() == 0){
-            std::cout << "no keypoint" << std::endl;
+            std::cout << "Bad frame: no keypoint" << std::endl;
+            error = ERROR_BAD_FRAME;
             continue;
         }
 
@@ -294,44 +323,40 @@ int main(int argc, char *argv[]) {
             // push the blob to pq
             Blob blob(best_dist_tmp, best_point_tmp, best_pixel_tmp, curr_keypoint);
             blob_pq.push(blob);
-            // check if this blob is the closest
-            /*
-            if (min_z == 0 || z < min_z){
-                min_z = z;
-                best_point = best_point_tmp;
-                best_pixel = best_pixel_tmp;
-            }
-            */
         }
+
         std::vector<Blob> breakers;
         Blob best_blob;
         // for valves, we find one best keypoint
         if (device_type != DEVICE_BREAKER){
             best_blob = blob_pq.top();
             blob_pq.pop();
+            // store point into valve_coord
+            valve_coord = best_blob.point;
             std::cout << "Pixel: " << best_blob.pixel.x << ", " << best_blob.pixel.y << "\tPoint: " << best_blob.point.x << ", " << best_blob.point.y << ", " << best_blob.point.z << std::endl;
         }
         // for breakers, we find 3 best keypoints from PQ
+        // currently, these are unordered. They're ordered in Step 4.2
         else {
             for (int i = 0; i < 3; i++){
                 best_blob = blob_pq.top();
                 breakers.push_back(best_blob);
                 blob_pq.pop();
+                /*
                 std::cout << "Breaker " << i << ": " <<std::endl;
                 std::cout << "Pixel: " << best_blob.pixel.x << ", " << best_blob.pixel.y << "\tPoint: " << best_blob.point.x << ", " << best_blob.point.y << ", " << best_blob.point.z << std::endl;
+                */
             }
-            std::cout << std::endl;
+            //std::cout << std::endl;
         }
 
 
 
-        //// Determine valve configuration (vertically/horizontally mounted)
+        // Step 4: Determine states and configurations
         Mat rethresh_mask = Mat::zeros(Size(w1, h1), CV_8UC1);
         Mat rsimage_rethreshed;
         int r;
-        int device_config;
-        int device_state;
-        // if it's a valve:
+        // Step 4.1: if it's a valve:
         if (device_type != DEVICE_BREAKER){
             r = 100;
             // if it's a shuttlecock valve, we just check its #pixels
@@ -361,7 +386,8 @@ int main(int argc, char *argv[]) {
             std::vector<std::vector<cv::Point>> contours;
             findContours(rsimage_rethreshed, contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
             if (contours.size() == 0) {
-                std::cout << "No contour!" << std::endl;
+                std::cout << "bad frame: No contour!" << std::endl;
+                error = ERROR_BAD_FRAME;
                 continue;
             }
             double best_area = cv::contourArea(contours[0]);
@@ -374,6 +400,8 @@ int main(int argc, char *argv[]) {
                 }
             }
             if (contours[best_idx].size() < 5) {
+                std::cout << "bad frame: too few countours" << std::endl;
+                error = ERROR_BAD_FRAME;
                 continue;
             }
             cv::RotatedRect ell = fitEllipse(contours[best_idx]);
@@ -411,8 +439,9 @@ int main(int argc, char *argv[]) {
             }
             std::cout << get_valve_string(device_config, device_state, device_type) << std::endl;
         }
+
+        // Step 4.2: if the device is a breaker box
         else{
-            int breaker_state[3];
             //// Determine breaker state (up/down)
             // sort based on pixel x
             Blob breaker[3];
@@ -444,6 +473,7 @@ int main(int argc, char *argv[]) {
             }
             breaker[1] = breakers.at(b2_idx);
 
+
             Mat black_mask;
             inRange(rsimagec_rgb, black_min, black_max, black_mask);
             bitwise_or(black_mask, rsimagec_segmented, rsimagec_segmented);
@@ -452,112 +482,36 @@ int main(int argc, char *argv[]) {
             std::cout << dx << std::endl;
             // draw text on the breakders 
             for (int i = 0; i < 3; i++){
+                // store 3d point in output vector
+                breaker_coords.push_back(breaker[0].point);
+
                 // determine breaker state
-                // this code is not robust
-                /*
-                if (breaker[i].point.y < -0.05)
-                    breaker_state[i] = BREAKER_UP;
-                else
-                    breaker_state[i] = BREAKER_DOWN;
-                */
-                std::cout << "here" << std::endl;
                 Mat breaker_pic;
                 Rect breaker_roi;
                 Point up_left;
                 Point bot_right;
                 int x0, y0, x1, y1;
-                if (i == 0 || i == 2 || i== 1){
-                    x0 = (int)(breaker[i].pixel.x - dx/1.7);
-                    if (x0 < 0)
-                        x0 = 0;
-                    y0 = (int)(breaker[i].pixel.y - dx*2.7);
-                    if (y0 < 0) 
-                        y0 = 0;
-                    x1 = (int)(breaker[i].pixel.x + dx/1.7);
-                    if (x1 >= w1)
-                        x1 = w1-1;
-                    y1 = (int)(breaker[i].pixel.y + dx*3);
-                    if (y1 > h1-1)
-                        y1 = h1-1;
-                }
-               /* else if (i == 1){
-                    x0 = (int)(breaker[i].pixel.x - dx*1.5);
-                    if (x0 < 0)
-                        x0 = 0;
-                    y0 = (int)(breaker[i].pixel.y - dx*2.7);
-                    if (y0 < 0) 
-                        y0 = 0;
-                    x1 = (int)(breaker[i].pixel.x + dx*1.5);
-                    if (x1 >= w1)
-                        x1 = w1-1;
-                    y1 = (int)(breaker[i].pixel.y + dx*4);
-                    if (y1 > h1-1)
-                        y1 = h1-1;
-                }*/
+
+                x0 = (int)(breaker[i].pixel.x - dx/1.7);
+                if (x0 < 0)
+                    x0 = 0;
+                y0 = (int)(breaker[i].pixel.y - dx*2.7);
+                if (y0 < 0) 
+                    y0 = 0;
+                x1 = (int)(breaker[i].pixel.x + dx/1.7);
+                if (x1 >= w1)
+                    x1 = w1-1;
+                y1 = (int)(breaker[i].pixel.y + dx*3);
+                if (y1 > h1-1)
+                    y1 = h1-1;
+
                 up_left = Point2i(x0, y0);
                 bot_right = Point2i(x1, y1);
                 breaker_roi = Rect(up_left, bot_right);
                 rectangle(im_with_keypoints, breaker_roi, Scalar(255, 0,0),2);
                 breaker_pic = rsimagec_segmented(breaker_roi);
-/*
-                breaker_pic = rsimagec_segmented(breaker_roi);
-                // alternative way:
-                blur(breaker_pic, breaker_pic, Size(3,3));
-                Mat canny_output;
-                Canny( breaker_pic, canny_output, 60, 180);
-                std::vector<std::vector<Point>> contours_;
-                findContours( canny_output, contours_, RETR_TREE, CHAIN_APPROX_SIMPLE );
-                std::vector<std::vector<Point>> contours_poly(contours_.size() );
-                std::vector<Rect> boundRect( contours_.size() );
-                std::vector<Point2f>centers( contours_.size() );
-                std::vector<float>radius( contours_.size() );
-                for( size_t a = 0; a < contours_.size(); a++ )
-                {
-                    approxPolyDP( contours_[a], contours_poly[a], 3, true );
-                    boundRect[a] = boundingRect( contours_poly[a] );
-                    minEnclosingCircle( contours_poly[a], centers[a], radius[a] );
-                }
-                double best_area = cv::contourArea(contours_[0]);
-                size_t best_idx = 0;
-                for (size_t i = 1; i < contours_.size(); i++) {
-                    double area = cv::contourArea(contours_[i]);
-                    if (area > best_area) {
-                    best_idx = i;
-                    best_area = area;
-                    }
-                }
-                Rect br = boundRect[best_idx];
-*/
-/*
-                // fit ellipse, find rect upper and lower bound
-                std::vector<std::vector<cv::Point>> contours;
-                findContours(breaker_pic, contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE, cv::Point(0, 0));
-                if (contours.size() == 0) {
-                    std::cout << "No contour!" << std::endl;
-                    continue;
-                }
-                double best_area = cv::contourArea(contours[0]);
-                size_t best_idx = 0;
-                for (size_t i = 1; i < contours.size(); i++) {
-                    double area = cv::contourArea(contours[i]);
-                    if (area > best_area) {
-                    best_idx = i;
-                    best_area = area;
-                    }
-                }
-                if (contours[best_idx].size() < 5) {
-                    continue;
-                }
-                cv::RotatedRect ell = fitEllipse(contours[best_idx]);
-                Rect br = ell.boundingRect();
 
-                int upper = br.tl().y + breaker_roi.tl().y;
-                int lower = br.br().y + breaker_roi.tl().y;
-                int left = br.tl().x + breaker_roi.tl().x;
-                int right = br.br().x + breaker_roi.br().x;
-*/
-
-                // alternatively, we look at the roi and check for the bound
+                // we look at the roi and check for the bound
                 int white_idx_top, white_idx_bot;
                 for (int g = 0; g < breaker_roi.height; g+= 3){
                     if(breaker_pic.at<uchar>(g, (int)breaker[i].pixel.x - breaker_roi.tl().x) > 0 && g >= 40){
@@ -601,17 +555,18 @@ int main(int argc, char *argv[]) {
             std::cout << get_breaker_string(breaker_state[0]) << ", " << get_breaker_string(breaker_state[1]) << ", " << get_breaker_string(breaker_state[2]) << std::endl;
         }
 
+        if (displayImage == 1){
+            // Show blobs
+            Mat buf2;
+            //Mat rsimagec_rgb_backup;
+            //cvtColor(rsimagec, rsimagec_rgb_backup, COLOR_BGR2RGB);
+            cvtColor(rsimagec_segmented, rsimagec_segmented_rgb, COLOR_RGBA2RGB);
+            Mat imgarray[] = {rsimagec_rgb, im_with_keypoints, rsimagec_segmented_rgb};	
+            hconcat(imgarray, 3, buf2);
+            imshow("image", buf2);
+        }
 
-        // Show blobs
-        Mat buf2;
-        //Mat rsimagec_rgb_backup;
-        //cvtColor(rsimagec, rsimagec_rgb_backup, COLOR_BGR2RGB);
-        cvtColor(rsimagec_segmented, rsimagec_segmented_rgb, COLOR_RGBA2RGB);
-		Mat imgarray[] = {rsimagec_rgb, im_with_keypoints, rsimagec_segmented_rgb};	
-	    hconcat(imgarray, 3, buf2);
-        imshow("image", buf2);
-
-
+        /*
         // Press 'c' to capture frames
 		if( waitKey(1) == 'c' ) { // 0x20 (SPACE) ; need a small delay !! we use this to also add an exit option
 			printf("Capturing frames %d...\n", frame_num);
@@ -619,21 +574,24 @@ int main(int argc, char *argv[]) {
             imwrite(filename_rs, buf2);
             frame_num++;
 		}
+        */
 
-/*
+        /*
         // display colored point cloud
         Mat rsimagec_bgr;
         cvtColor(rsimagec_rgb, rsimagec_bgr, COLOR_RGB2BGR);
         app_state.tex.upload0(rsimagec_bgr);
         draw_pointcloud(app.width(), app.height(), app_state, points_c, pixels_c, points_i);
-*/
+        */
 
-		
+		/*
         // Press 'q' to exit
 		if( waitKey(1) == 'q' ) { // 0x20 (SPACE) ; need a small delay !! we use this to also add an exit option
 			printf("q key pressed. Quitting !\n");
 			break;
 		}
+        */
+
     }
 
 
