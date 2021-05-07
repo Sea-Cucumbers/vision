@@ -46,7 +46,7 @@ int main(int argc, char *argv[]) {
     char *device_type_str = argv[1];
     char *displayImage_str = argv[2];
 
-    int displayImage = 0;
+    int displayImage = 1;
     int device_type;
     int breaker_type;
 

@@ -1,7 +1,7 @@
-/home/pi/sea-cucumbers/vision/realsense/build/CMakeFiles/install/strip.dir
-/home/pi/sea-cucumbers/vision/realsense/build/CMakeFiles/edit_cache.dir
-/home/pi/sea-cucumbers/vision/realsense/build/CMakeFiles/locate_device.dir
-/home/pi/sea-cucumbers/vision/realsense/build/CMakeFiles/rebuild_cache.dir
-/home/pi/sea-cucumbers/vision/realsense/build/CMakeFiles/list_install_components.dir
-/home/pi/sea-cucumbers/vision/realsense/build/CMakeFiles/install.dir
-/home/pi/sea-cucumbers/vision/realsense/build/CMakeFiles/install/local.dir
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/realsense/build/CMakeFiles/install/strip.dir
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/realsense/build/CMakeFiles/edit_cache.dir
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/realsense/build/CMakeFiles/locate_device.dir
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/realsense/build/CMakeFiles/install.dir
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/realsense/build/CMakeFiles/rebuild_cache.dir
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/realsense/build/CMakeFiles/list_install_components.dir
+/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/realsense/build/CMakeFiles/install/local.dir

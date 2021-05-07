@@ -4,7 +4,7 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/home/pi/sea-cucumbers/vision/realsense/src/locate_device.cpp" "/home/pi/sea-cucumbers/vision/realsense/build/CMakeFiles/locate_device.dir/src/locate_device.cpp.o"
+  "/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/realsense/src/locate_device.cpp" "/home/tina-laptop/localFiles/courses/sea-cucumbers/vision/realsense/build/CMakeFiles/locate_device.dir/src/locate_device.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")
 
@@ -13,7 +13,8 @@ set(CMAKE_CXX_TARGET_INCLUDE_PATH
   "../$(OpenCV_INCLUDE_DIRS)"
   "../includes"
   "../locate_device"
-  "/opt/opencv-4.1.0/include/opencv4"
+  "/usr/local/include"
+  "/usr/local/include/opencv4"
   )
 
 # Targets to which this target links.

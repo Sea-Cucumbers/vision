@@ -1,7 +1,7 @@
 file(REMOVE_RECURSE
   "CMakeFiles/locate_device.dir/src/locate_device.cpp.o"
-  "locate_device"
   "locate_device.pdb"
+  "locate_device"
 )
 
 # Per-language clean rules from dependency scanning.
